@@ -1,0 +1,146 @@
+/* 랭킹 뱃지 스타일 */
+.ranking-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: center; /* Flex 컨테이너 내에서 세로 중앙 정렬 (사이즈 유지) */
+  gap: 4px; /* 아이콘과 텍스트 간격 */
+  padding: 4px 8px; /* 뱃지 내부 여백 */
+  border-radius: 5px;
+  font-size: 12px; /* 글자 크기 축소 */
+  font-weight: 500;
+  color: white;
+  background-color: #FF0095; /* 선명한 핑크색 */
+  margin-left: 8px;
+  transition: filter 0.2s ease;
+  position: relative;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.ranking-badge:hover {
+  filter: brightness(0.95);
+}
+
+/* SVG 별 아이콘 스타일 */
+.ranking-star-svg {
+  width: 12px;
+  height: 12px;
+  stroke: white; /* 선 색상 */
+  stroke-width: 2.5; /* 선 두께 */
+  fill: none; /* 채우기 없음 */
+}
+
+.ranking-text, .stars-text {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .ranking-badge {
+    font-size: 11px;
+    padding: 3px 6px;
+    margin-left: 4px;
+    gap: 3px;
+  }
+  
+  .ranking-star-svg {
+    width: 11px;
+    height: 11px;
+  }
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .ranking-badge {
+    /* 다크모드에서는 기본 스타일 유지 */
+  }
+}
+
+/* 랭킹별 색상 */
+.ranking-gold {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+  color: #8b4513;
+}
+
+.ranking-silver {
+  background: linear-gradient(135deg, #c0c0c0 0%, #a9a9a9 100%);
+  color: #2f4f4f;
+}
+
+.ranking-bronze {
+  background: linear-gradient(135deg, #cd7f32 0%, #b8860b 100%);
+  color: white;
+}
+
+/* 특별 랭킹 (1-3위) */
+.ranking-badge[data-rank="1"] {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+  color: #8b4513;
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+.ranking-badge[data-rank="2"] {
+  background: linear-gradient(135deg, #c0c0c0 0%, #a9a9a9 100%);
+  color: #2f4f4f;
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+.ranking-badge[data-rank="3"] {
+  background: linear-gradient(135deg, #cd7f32 0%, #b8860b 100%);
+  color: white;
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  to {
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  }
+}
+
+/* 툴팁 스타일 */
+.ranking-badge::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1001;
+  font-weight: normal;
+  max-width: 200px;
+  word-wrap: break-word;
+}
+
+.ranking-badge:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Succinct 테마 색상 */
+.ranking-badge.succinct-theme {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ranking-badge.succinct-theme.ranking-gold {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #92400e;
+}
+
+.ranking-badge.succinct-theme.ranking-silver {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  color: #1f2937;
+} 

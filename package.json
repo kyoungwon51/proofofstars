@@ -1,0 +1,45 @@
+{
+  "name": "proof-of-stars",
+  "version": "1.0.0",
+  "description": "Displays Succinct Proof of Stars stats on Twitter profiles.",
+  "main": "succinct-api.js",
+  "scripts": {
+    "start": "node succinct-api.js",
+    "dev": "node succinct-api.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "chrome-extension",
+    "twitter",
+    "ranking",
+    "badge",
+    "social-media"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/twitter-ranking-badge-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/twitter-ranking-badge-extension/issues"
+  },
+  "homepage": "https://github.com/yourusername/twitter-ranking-badge-extension#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.34.2"
+  },
+  "files": [
+    "manifest.json",
+    "content.js",
+    "background.js",
+    "popup.html",
+    "popup.js",
+    "styles.css",
+    "icons/",
+    "README.md",
+    "INSTALL.md"
+  ]
+}
