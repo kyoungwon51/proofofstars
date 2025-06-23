@@ -45,13 +45,18 @@ async function handleGetRankingData(username, sendResponse) {
       return;
     }
 
-    const apiUrl = 'http://localhost:3001/rankings';
+    const apiUrl = 'https://proofofstars.vercel.app/rankings';
     const response = await fetch(`${apiUrl}?username=${username}`);
+
+    if (response.status === 404) {
+      sendResponse({ success: false, notFound: true });
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(`API error: ${response.statusText}`);
     }
     const data = await response.json();
-    
     await cacheRank(username, data);
     sendResponse(data);
 
@@ -210,17 +215,244 @@ async function refreshAllRankings() {
     }
 
     // API에서 전체 데이터 가져오기
-    const apiUrl = 'http://localhost:3001/rankings';
+    const apiUrl = 'https://proofofstars.vercel.app/rankings';
     const response = await fetch(apiUrl, { method: 'POST' });
     if (!response.ok) {
       throw new Error(`API error: ${response.statusText}`);
     }
     const data = await response.json();
-    
     await cacheRank(data.username, data);
     return data;
   } catch (error) {
     console.error('랭킹 데이터 새로고침 실패:', error);
     return { success: false, error: error.message };
   }
-} 
+}
+
+let rankingMapCache = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60 * 60 * 1000; // 1시간
+
+async function fetchLatestTxId() {
+  const query = {
+    query: `
+      query {
+        transactions(
+          tags: [{ name: "App-Name", values: ["SuccinctStatsRanking"] }]
+          first: 1
+          sort: HEIGHT_DESC
+        ) {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `
+  };
+  try {
+    const res = await fetch('https://arweave.net/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(query)
+    });
+    const json = await res.json();
+    return json.data.transactions.edges[0]?.node?.id || null;
+  } catch (e) {
+    console.error('Failed to fetch latest txid:', e);
+    return null;
+  }
+}
+
+async function fetchRankingMap() {
+  const now = Date.now();
+  if (rankingMapCache && (now - lastFetchTime < CACHE_DURATION)) {
+    return rankingMapCache;
+  }
+  try {
+    const txId = await fetchLatestTxId();
+    if (!txId) throw new Error('No txId found');
+    const res = await fetch(`https://gateway.irys.xyz/${txId}`);
+    if (!res.ok) throw new Error('Failed to fetch rankings from Irys');
+    const rankings = await res.json();
+    const map = Object.fromEntries(rankings.map(r => [r.name.replace(/^@/, ''), r]));
+    rankingMapCache = map;
+    lastFetchTime = now;
+    return map;
+  } catch (e) {
+    console.error('Failed to fetch ranking map:', e);
+    return {}; // 빈 맵 반환
+  }
+}
+
+// 사용 예시 (트위터 프로필에서 username 추출 후)
+async function showBadgeForUser(username) {
+  const rankingMap = await fetchRankingMap();
+  const userRanking = rankingMap[username];
+  if (userRanking) {
+    // 뱃지 표시 로직
+    console.log('Rank:', userRanking.rank, 'Stars:', userRanking.stars);
+    // ...뱃지 DOM 생성 코드...
+  } else {
+    // 유저가 랭킹에 없을 때
+    console.log('No ranking found for', username);
+    // ...뱃지 숨기기/미표시...
+  }
+}
+
+(function() {
+  if (window.__PROOF_OF_STARS_BADGE_LOADED__) return;
+  window.__PROOF_OF_STARS_BADGE_LOADED__ = true;
+
+  let rankingMapCache = null;
+  let lastFetchTime = 0;
+  const CACHE_DURATION = 60 * 60 * 1000;
+
+  async function fetchLatestTxId() {
+    const query = {
+      query: `
+        query {
+          transactions(
+            tags: [{ name: "App-Name", values: ["SuccinctStatsRanking"] }]
+            first: 1
+            sort: HEIGHT_DESC
+          ) {
+            edges { node { id } }
+          }
+        }
+      `
+    };
+    try {
+      const res = await fetch('https://arweave.net/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query)
+      });
+      const json = await res.json();
+      return json.data.transactions.edges[0]?.node?.id || null;
+    } catch (e) {
+      console.error('Failed to fetch latest txid:', e);
+      return null;
+    }
+  }
+
+  async function fetchRankingMap() {
+    const now = Date.now();
+    if (rankingMapCache && (now - lastFetchTime < CACHE_DURATION)) return rankingMapCache;
+    try {
+      const txId = await fetchLatestTxId();
+      if (!txId) throw new Error('No txId found');
+      const res = await fetch(`https://gateway.irys.xyz/${txId}`);
+      if (!res.ok) throw new Error('Failed to fetch rankings from Irys');
+      const rankings = await res.json();
+      const map = Object.fromEntries(rankings.map(r => [r.name.replace(/^@/, ''), r]));
+      rankingMapCache = map;
+      lastFetchTime = now;
+      return map;
+    } catch (e) {
+      console.error('Failed to fetch ranking map:', e);
+      return {};
+    }
+  }
+
+  class TwitterRankingBadge {
+    constructor() {
+      this.enabled = true;
+      this.init();
+    }
+    async init() {
+      this.observePageChanges();
+      if (this.enabled) this.addRankingBadges();
+    }
+    observePageChanges() {
+      const observer = new MutationObserver(() => {
+        if (this.enabled) this.addRankingBadges();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+    async addRankingBadges() {
+      if (!this.enabled) return;
+      const profileElements = this.findProfileElements();
+      for (const element of profileElements) {
+        if (!element.hasAttribute('data-ranking-badge-added')) {
+          await this.addBadgeToProfile(element);
+        }
+      }
+    }
+    findProfileElements() {
+      const selectors = [
+        '[data-testid="UserName"]',
+        '[data-testid="User-Name"]',
+        'div[role="article"] [data-testid="User-Name"]',
+        'div[data-testid="tweet"] [data-testid="User-Name"]',
+        'a[href*="/status/"] [data-testid="User-Name"]'
+      ];
+      const elements = [];
+      selectors.forEach(selector => {
+        const found = document.querySelectorAll(selector);
+        found.forEach(el => elements.push(el));
+      });
+      return [...new Set(elements)];
+    }
+    async addBadgeToProfile(profileElement) {
+      try {
+        const username = this.extractUsername(profileElement);
+        if (!username) return;
+        const ranking = await this.getRankingInfo(username);
+        if (!ranking) return;
+        const badge = this.createRankingBadge(ranking);
+        this.insertBadge(profileElement, badge);
+        profileElement.setAttribute('data-ranking-badge-added', 'true');
+      } catch (error) {
+        console.error('뱃지 추가 실패:', error);
+      }
+    }
+    extractUsername(profileElement) {
+      const usernameElement = profileElement.querySelector('a[href*="/"]');
+      if (usernameElement) {
+        const href = usernameElement.getAttribute('href');
+        const match = href.match(/\/([^\/]+)$/);
+        return match ? match[1] : null;
+      }
+      const text = profileElement.textContent;
+      const atMatch = text.match(/@(\w+)/);
+      return atMatch ? atMatch[1] : null;
+    }
+    async getRankingInfo(username) {
+      try {
+        const rankingMap = await fetchRankingMap();
+        return rankingMap[username] || rankingMap['@' + username] || null;
+      } catch (e) {
+        console.error('랭킹 정보 가져오기 실패:', e);
+        return null;
+      }
+    }
+    createRankingBadge(ranking) {
+      const badge = document.createElement('div');
+      badge.className = 'ranking-badge';
+      badge.setAttribute('data-rank', ranking.rank);
+      badge.setAttribute('data-stars', ranking.stars);
+      const rankWithSuffix = `${ranking.rank}th`;
+      const starSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="ranking-star-svg"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>`;
+      badge.innerHTML = `
+        <span class="ranking-text">${rankWithSuffix}</span>
+        ${starSvg}
+        <span class="stars-text">${ranking.stars.toLocaleString()}</span>
+      `;
+      return badge;
+    }
+    insertBadge(profileElement, badge) {
+      const container = profileElement.closest('[data-testid="User-Name"]') || profileElement;
+      const existingBadge = container.querySelector('.ranking-badge');
+      if (existingBadge) existingBadge.remove();
+      container.appendChild(badge);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => new TwitterRankingBadge());
+  } else {
+    new TwitterRankingBadge();
+  }
+})(); 

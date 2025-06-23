@@ -29,6 +29,8 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@irys/sdk": "^0.2.11",
+    "axios": "^1.10.0",
     "sharp": "^0.34.2"
   },
   "files": [

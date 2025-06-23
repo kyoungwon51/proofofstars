@@ -85,8 +85,8 @@ async function getCachedLeaderboard() {
   return leaderboardCache;
 }
 
-// HTTP 서버 생성
-const server = http.createServer(async (req, res) => {
+// Vercel 서버리스 함수 핸들러
+module.exports = async (req, res) => {
   // CORS 처리
   if (req.method === 'OPTIONS') {
     res.writeHead(200, corsHeaders);
@@ -185,34 +185,4 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(500, corsHeaders);
     res.end(JSON.stringify({ error: 'Internal server error' }));
   }
-});
-
-// 서버 시작
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Succinct Stats API server running on http://localhost:${PORT}`);
-  console.log(`📊 Available endpoints:`);
-  console.log(`   GET  /rankings?username=<username> - Get ranking for user`);
-  console.log(`   POST /rankings - Get top 100 rankings`);
-  console.log(`   GET  /health - Health check`);
-  console.log(`   POST /refresh - Refresh cache`);
-  console.log(``);
-  console.log(`💡 For Chrome extension testing, use:`);
-  console.log(`   http://localhost:${PORT}/rankings?username=SaiMoo_n`);
-  console.log(``);
-  console.log(`🔄 Cache duration: ${CACHE_DURATION / 1000 / 60} minutes`);
-});
-
-// 에러 처리
-server.on('error', (err) => {
-  console.error('Server error:', err);
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down server...');
-  server.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-}); 
+}; 

@@ -143,4 +143,16 @@
 .ranking-badge.succinct-theme.ranking-silver {
   background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
   color: #1f2937;
+}
+
+.succinct-badge-container {
+  display: flex;
+  align-items: center;
+}
+
+.succinct-badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  /* 기존 스타일 유지 */
 } 
