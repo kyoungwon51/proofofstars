@@ -26,8 +26,9 @@
   // 트위터 랭킹 뱃지 익스텐션
   class TwitterRankingBadge {
     constructor() {
-      this.rankingData = {};
       this.enabled = true;
+      this.badgeEnabled = true;
+      this.isInitialized = false;
       this.init();
     }
 
@@ -41,18 +42,18 @@
       // 페이지 변경 감지
       this.observePageChanges();
       
-      // 초기 뱃지 추가
-      if (this.enabled) {
+      // 초기화 상태 확인 후 뱃지 추가
+      if (this.enabled && this.badgeEnabled && this.isInitialized) {
         this.addRankingBadges();
       }
     }
 
     async loadSettings() {
       try {
-        const result = await chrome.storage.sync.get(['rankingApiUrl', 'rankingData', 'enabled']);
-        this.rankingData = result.rankingData || {};
-        this.apiUrl = result.rankingApiUrl || 'http://localhost:3001/rankings';
+        const result = await chrome.storage.local.get(['enabled', 'isInitialized', 'badgeEnabled']);
         this.enabled = result.enabled !== false;
+        this.badgeEnabled = result.badgeEnabled !== false;
+        this.isInitialized = result.isInitialized || false;
       } catch (error) {
         console.error('설정 로드 실패:', error);
       }
@@ -68,21 +69,22 @@
           case 'extensionStateChanged':
             this.handleStateChange(request.enabled);
             break;
-          case 'cacheCleared':
-            this.handleCacheCleared();
-            break;
           case 'dataRefreshed':
             this.handleDataRefreshed();
+            break;
+          case 'badgeStateChanged':
+            this.handleBadgeStateChange(request.enabled);
             break;
         }
       });
     }
 
     handleSettingsUpdate(settings) {
-      this.apiUrl = settings.rankingApiUrl || this.apiUrl;
       this.enabled = settings.enabled !== false;
+      this.badgeEnabled = settings.badgeEnabled !== false;
+      this.isInitialized = settings.isInitialized || false;
       
-      if (this.enabled) {
+      if (this.enabled && this.badgeEnabled && this.isInitialized) {
         this.addRankingBadges();
       } else {
         this.removeAllBadges();
@@ -91,33 +93,34 @@
 
     handleStateChange(enabled) {
       this.enabled = enabled;
-      if (enabled) {
+      if (this.enabled && this.badgeEnabled && this.isInitialized) {
         this.addRankingBadges();
       } else {
         this.removeAllBadges();
       }
     }
 
-    handleCacheCleared() {
-      this.rankingData = {};
+    handleDataRefreshed() {
+      this.isInitialized = true;
       this.removeAllBadges();
-      if (this.enabled) {
+      if (this.enabled && this.badgeEnabled) {
         this.addRankingBadges();
       }
     }
 
-    handleDataRefreshed() {
-      this.rankingData = {};
-      this.removeAllBadges();
-      if (this.enabled) {
+    handleBadgeStateChange(enabled) {
+      this.badgeEnabled = enabled;
+      if (this.enabled && this.badgeEnabled && this.isInitialized) {
         this.addRankingBadges();
+      } else {
+        this.removeAllBadges();
       }
     }
 
     observePageChanges() {
       // 트위터의 SPA 특성을 고려한 페이지 변경 감지
       const observer = new MutationObserver(() => {
-        if (this.enabled) {
+        if (this.enabled && this.badgeEnabled && this.isInitialized) {
           this.addRankingBadges();
         }
       });
@@ -129,7 +132,7 @@
     }
 
     async addRankingBadges() {
-      if (!this.enabled) return;
+      if (!this.enabled || !this.badgeEnabled || !this.isInitialized) return;
       
       // 프로필 요소들 찾기
       const profileElements = this.findProfileElements();
@@ -175,7 +178,7 @@
         const username = this.extractUsername(profileElement);
         if (!username) return;
 
-        // 랭킹 정보 가져오기
+        // 랭킹 정보 가져오기 (로컬 캐시에서)
         const ranking = await this.getRankingInfo(username);
         if (!ranking) {
           // 랭킹이 없는 사용자는 뱃지 추가하지 않음
@@ -210,11 +213,6 @@
     }
 
     async getRankingInfo(username) {
-      // 캐시된 데이터 확인
-      if (this.rankingData[username]) {
-        return this.rankingData[username];
-      }
-
       try {
         const response = await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage({
@@ -229,11 +227,10 @@
           });
         });
 
-        if (response && response.success) {
-          this.rankingData[username] = response.data;
+        if (response && response.success && response.data) {
           return response.data;
         } else {
-          // 랭킹이 없는 경우(404 등)는 에러 로그를 남기지 않고 null 반환
+          // 랭킹이 없는 경우는 null 반환
           return null;
         }
       } catch (error) {
@@ -245,48 +242,9 @@
         ) {
           return null;
         }
-        let errorMsg;
-        if (typeof error === 'object') {
-          if (error.message) {
-            errorMsg = error.message;
-          } else {
-            try {
-              errorMsg = JSON.stringify(error);
-            } catch (e) {
-              errorMsg = String(error);
-            }
-          }
-        } else {
-          errorMsg = String(error);
-        }
-        console.error('랭킹 정보 가져오기 실패:', errorMsg);
+        console.error('랭킹 정보 가져오기 실패:', error);
         return null;
       }
-    }
-
-    getFallbackRanking(username) {
-      // API 실패 시 사용할 기본 랭킹 데이터
-      const hash = this.hashCode(username);
-      const rank = (hash % 1000) + 1;
-      
-      return {
-        rank: rank,
-        stars: Math.floor(Math.random() * 50000) + 1000,
-        proofs: Math.floor(Math.random() * 100) + 1,
-        cycles: Math.floor(Math.random() * 10000000) + 100000,
-        category: 'succinct',
-        lastUpdated: new Date().toISOString()
-      };
-    }
-
-    hashCode(str) {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-      }
-      return Math.abs(hash);
     }
 
     createRankingBadge(ranking) {
@@ -295,7 +253,7 @@
       badge.setAttribute('data-rank', ranking.rank);
       badge.setAttribute('data-stars', ranking.stars);
       
-      const rankWithSuffix = `${ranking.rank}th`;
+      const rankWithSuffix = `${ranking.rank}${getOrdinalSuffix(ranking.rank)}`;
       
       const starSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="ranking-star-svg"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>`;
 
